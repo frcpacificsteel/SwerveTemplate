@@ -1,155 +1,203 @@
-# FRC Team 5025 - New Member Repository Guide
+# FRC Team 5025 — Repository Guide
 
-Welcome to the Team 5025 codebase! This guide covers the essential parts of the repository that team members will actively modify during the season. 
+This is a 2026 WPILib command-based template designed to keep game-specific work easy to replace and the eventual 2027 Systemcore migration contained.
 
-The codebase follows the WPILib Command-Based pattern. Your primary focus will be updating constants, binding controller buttons, writing mechanism subsystems, and defining autonomous actions.
+## Project Structure
 
----
+All robot code is under `src/main/java/frc/robot/`:
 
-## Workspace Structure at a Glance
+- `RobotContainer.java`: constructs and connects the robot's major components.
+- `config/`: frequently adjusted values and season policy.
+- `controls/`: controller hardware and all button bindings.
+- `autos/`: Java routine builder, selection, conditions, fallbacks, time-aware branches, and recovery.
+- `commands/`: reusable robot actions such as field-target pathfinding.
+- `subsystems/`: drivetrain, Limelight vision, and mechanism hardware.
+- `superstructure/`: high-level goals spanning mechanisms.
+- `safety/`: interlocks, homing state, and latched faults.
+- `telemetry/`: NT4 data, health status, warnings, and bounded tunables.
+- `util/`: alliance and field-coordinate helpers.
+- `config/SwerveConstants.java`: CTRE drivetrain calibration and drivetrain factory.
 
-All active code is under `src/main/java/frc/robot/`:
+## Fast Iteration
 
-- `RobotContainer.java`: Controller button bindings, speeds, and autonomous chooser setup.
-- `constants/`: Hardcoded numbers (CAN IDs, controller ports, speed limits, field poses).
-- `subsystems/mechanisms/`: Individual robot mechanisms (intake, shooter, elevator, etc.).
-- `subsystems/StateHandler.java`: High-level coordination between mechanisms and drivetrain pathfinding.
+Start in `config/` for normal pit and practice changes:
 
----
+- `DriveConstants.java`: drive scale, deadband, and path constraints.
+- `VisionConstants.java`: Limelight name, heartbeat timeout, and pose filters.
+- `FieldConstants.java`: field dimensions and blue-origin target poses.
+- `CanTopology.java`: logical bus names and non-swerve CAN IDs.
+- `ControlConstants.java`: driver and operator USB ports.
+- `TemplateMechanismSubsystem.java`: hardware-free, documented mechanism skeleton.
+- `AutoConstants.java`: match duration, fallback chains, requirements, timeouts, and example-routine switch.
+- `RobotConfig.java`: active robot profile and runtime-tuning permission.
 
-## 1. Modifying Configuration & Constants
+Keep swerve IDs, offsets, and gains together in `config/SwerveConstants.java`. Re-export from Tuner X after recalibration if that is your workflow, then preserve any team-maintained edits intentionally.
 
-Always update physical constants in the `constants` directory rather than hardcoding values in subsystem files.
+When `RobotConfig.TUNING_ENABLED` is `false`, reviewed code constants always win. When enabled for controlled testing, bounded values under `Tunables/` may override the supported tuning points.
 
-### Mechanism Constants (`src/main/java/frc/robot/constants/MechanismConstants.java`)
+## Controls
 
-Edit this file when adding new hardware or tweaking motor limits:
+`DriverControls` and `OperatorControls` translate controller hardware into named intent. `ControlBindings` connects that intent to commands. Subsystems must never read an Xbox controller directly.
 
-- Controller Ports:
-  - `controllerOnePort` (default `0`): Driver controller port.
-  - `controllerTwoPort` (default `1`): Operator controller port.
-- Motor CAN IDs:
-  - Assign motor CAN IDs in the range `50` through `59` (for non-swerve TalonFX / Kraken motors).
-  - Example: `public static final int tfxPort50 = 50;`
-- Speed & Power Defaults:
-  - `EX_MOTOR_SPEED`: Speed multiplier for mechanisms (e.g. `0.5` for 50% power).
-  - `MAX_VOLTAGE`: Peak voltage limit (default `12.0` Volts).
-  - `MAX_CURRENT_SUPPLY`: Battery current draw limit in Amps (default `60` A).
-  - `MAX_CURRENT_STATOR`: Motor stator current limit in Amps (default `60` A).
-- TalonFX Configurations:
-  - `defaultConfig`: Standard TalonFX config with current limits and clockwise positive direction.
-  - `invertedDefaultConfig`: Config with counter-clockwise positive direction.
+Current driver controls:
 
-### Field Poses (`src/main/java/frc/robot/constants/PoseConstants.java`)
+- Left stick: field-centric translation.
+- Right stick X: rotation.
+- X: swerve brake.
+- Back: reset field heading.
+- Y: toggle pathfinding to the selected field target.
+- POV Left/Right/Down: select a field target.
+- B: request the primary superstructure action.
+- While disabled, POV Up/Down: cycle autonomous selection.
 
-Defines target coordinates (`Pose2d`) on the field for auto-alignment:
+Current operator controls:
 
-- `SHOOT_LEFT`: Target pose for shooting from the left field area.
-- `SHOOT_MID`: Target pose for shooting from center field.
-- `SHOOT_RIGHT`: Target pose for shooting from the right field area.
+- A: request the primary superstructure action.
+- B: stow.
+- Start: hold manual safety override. It only becomes active in Test mode and cannot bypass hard interlocks.
+- While disabled, Back: clear latched faults after the underlying problem is corrected.
 
-Format: `new Pose2d(xMeters, yMeters, Rotation2d.fromDegrees(angleDegrees))`
+## Limelight Vision
 
-### State Enums (`src/main/java/frc/robot/constants/StateConstants.java`)
+`LimelightVisionSubsystem` is the only class that calls `LimelightHelpers`. It supplies robot orientation for MegaTag 2, tracks the Limelight heartbeat, filters estimates, and gives the drivetrain only trusted measurements.
 
-Contains the `STATES` enum for robot operational modes. Add new enum constants here when creating high-level robot states.
+Published NT4 fields include:
 
-### Swerve Constants (`src/main/java/frc/robot/constants/SwerveConstants.java`)
+- `Vision/targetVisible`
+- `Vision/trustedPose`
+- `Vision/tagCount`
+- `Vision/rejectionReason`
 
-This file is generated by Tuner X. Key variables you may need to adjust:
+Camera mounting and AprilTag configuration remain in the Limelight interface. Change the camera's NetworkTables name in `VisionConstants.LIMELIGHT_NAME`.
 
-- `kSpeedAt12Volts`: Theoretical top speed of the drivetrain (e.g., `MetersPerSecond.of(3.79)`).
-- Encoder Offsets & Gains: `steerGains` and `driveGains` PID values.
+## Autonomous Selection and Recovery
 
----
+Autos are Java-defined; there are no `.auto` files. The editable `.path` library and its PathPlanner navgrid remain available for route authoring. This removes stale, opaque auto assemblies, unnamed event commands, and hidden dashboard chooser state while retaining the useful authored trajectories. PathPlanner powers both saved-path following and runtime recovery pathfinding.
 
-## 2. Setting Up Driver Controls & Autos (`src/main/java/frc/robot/RobotContainer.java`)
+The template deliberately starts with no selected auto. A valid choice is required before `RobotStatus/ready` can become true. `Autos.registerAll(...)` registers `Do Nothing` and, only when explicitly enabled, a safe-to-copy example.
 
-`RobotContainer` connects user input (Xbox controllers) to commands and configures autonomous routines.
+`AutoManager` publishes:
 
-### Speed Scaling
+- `Auto/Available`: Java routines registered by `Autos.java`.
+- `Auto/Requested`: dashboard-requested routine name.
+- `Auto/Selected`: requested primary routine.
+- `Auto/Readiness`: `READY`, a reason the selected auto is blocked, or `FALLBACK READY: <name>`.
+- `Auto/Executing`: the primary, fallback, or safe-stop routine actually running.
+- `Auto/Step`: the step currently being executed.
 
-To adjust overall drivetrain top speed, change `speed` (line 35):
+Select a routine by writing its exact name to `Auto/Requested` from an NT4 dashboard, or use driver POV Up/Down while disabled. An invalid request leaves the current selection unchanged and posts a warning.
+
+### Creating a routine
+
+Open `autos/Autos.java`. Each routine is a sequence of named Java steps. The normal building blocks are:
+
+- `pathfind(stepName, auto, blueOriginPose)` — drives to a blue-origin pose and automatically mirrors it for red.
+- `followPath(stepName, auto, pathName)` — follows `src/main/deploy/pathplanner/paths/<pathName>.path`.
+- `pathfindThenFollowPath(stepName, auto, pathName)` — recovers from the current robot pose, then joins and follows the saved path.
+- `step(stepName, commandSupplier)` — runs any normal WPILib command.
+- `auto.sequence(...)` / `auto.parallel(...)` — combines route and mechanism commands without extra imports.
+- `waitSeconds(stepName, auto, seconds)` — explicit timing pause.
+- `when(stepName, condition, trueRoute, falseRoute)` — chooses from live robot state when reached.
+- `whenTimeRemaining(stepName, seconds, fullRoute, shortRoute)` — chooses from real elapsed autonomous time when reached.
+- `whenScoringStillAvailable(...)` — estimates travel from the live robot pose, then chooses scoring or an alternate route.
+- `require(condition, message)` — blocks selection until a routine-specific prerequisite is true.
+
+`whenTimeRemaining` is the intended answer to a routine that takes longer than planned. It does not trust an estimated path duration: it checks the actual elapsed match time at the decision point. Measure a full route on the robot, add margin, and set `seconds` to the minimum time needed to finish safely. If the robot is late, its short route runs instead.
+
+`whenScoringStillAvailable` is the standard scoring rule. It estimates the pathfinding travel time from the robot's current pose to the selected scoring pose, adds `SCORING_ACTION_ESTIMATED_SECONDS` and `SCORING_TIME_SAFETY_MARGIN_SECONDS`, then compares that total with the real remaining autonomous time. This gives every field position its own feasibility decision. It is conservative planning guidance, not a promise: tune the action time and margin from field measurements.
+
+Use `followPath` when the robot should begin at the path's authored starting pose. Use `pathfindThenFollowPath` for a recovery branch, for example after a missed game piece or a slow score. It starts from the robot's current estimate and joins the next saved route instead of assuming the original path start is still valid. Both methods preflight the file name, so a missing path produces an `Auto/Readiness` warning before a match.
+
 ```java
-double speed = 1.00; // 1.00 = 100% speed, 0.50 = 50% speed
+autoManager.register(auto.routine("Leave And Decide")
+    .followPath("Leave start", auto, "Example Mobility")
+    .whenScoringStillAvailable(
+        "Score if the live pose can reach it safely",
+        auto,
+        FieldConstants.SCORE_MID,
+        AutoConstants.SCORING_ACTION_ESTIMATED_SECONDS,
+        AutoConstants.SCORING_TIME_SAFETY_MARGIN_SECONDS,
+        () -> auto.sequence(
+            auto.pathfindThenFollowPath("Example Recovery Route"),
+            auto.goal(SuperstructureGoal.PRIMARY_ACTION)),
+        auto::stow)
+    .build());
 ```
 
-### Controller Button Bindings (`configureBindings()`)
+Keep every named pose in `FieldConstants`, every speed limit in `DriveConstants`, and every safety/fallback policy in `AutoConstants`. This lets programmers tune a route without digging through command logic.
 
-All driver and operator controls are bound in `configureBindings()`.
+### Global recovery policy
 
-- Standard Controls currently configured on Controller 1:
-  - Left Stick X/Y: Field-centric translation.
-  - Right Stick X: Rotation.
-  - Back Button: Reset field-centric heading (`seedFieldCentric`).
-  - X Button (Hold): Swerve brake mode (locks wheels into X shape).
-  - Y Button (Toggle): Pathfind to current selected target pose.
-  - POV Left / Right / Down: Set target pose to `SHOOT_LEFT`, `SHOOT_RIGHT`, or `SHOOT_MID`.
-  - B Button: Execute state command.
+Configure policies in `AutoConstants`:
 
-- How to add a new button binding:
-  ```java
-  // Example: Run a mechanism command while holding the A button on controller two
-  OperatorConstants.controllerTwo.a().whileTrue(m_ExampleMechanismSubsystem.runMechanismCommand());
-  ```
+```java
+public static final Map<String, List<String>> FALLBACKS = Map.of(
+    "Leave And Decide", List.of("Safe Defense", "Do Nothing"));
 
-### Autonomous Command Setup (`configureAutoBindings()`)
+public static final Set<String> REQUIRES_TRUSTED_VISION = Set.of("Primary Auto");
+public static final Set<String> ABORTS_ON_SUPERSTRUCTURE_FAULT = Set.of("Leave And Decide");
+public static final Map<String, Double> TIMEOUT_SECONDS = Map.of("Leave And Decide", 12.0);
+```
 
-To allow PathPlanner autonomous routines to trigger robot actions:
+Every routine except `Do Nothing` has a 14.5-second default safety timeout. Configure a shorter per-routine timeout when appropriate. The included `Safe Defense` pattern pathfinds to `FieldConstants.DEFENSIVE_SAFE_POSITION` and stows mechanisms. Configure it as the first fallback for a mechanism-faulting primary routine; if it is unavailable, the manager uses `Do Nothing` and stows.
 
-1. Create or reference your command in `RobotContainer.java`.
-2. Register the command name in `configureAutoBindings()`:
-   ```java
-   NamedCommands.registerCommand("YourCommandName", yourCommandObject);
-   ```
-3. Use `"YourCommandName"` inside the PathPlanner GUI application.
+Register fallback routines before the primary routine that names them. A new routine automatically falls back to `Do Nothing` unless it has an explicit `FALLBACKS` entry.
 
----
+## Superstructure and Mechanisms
 
-## 3. Creating & Editing Mechanisms (`src/main/java/frc/robot/subsystems/mechanisms/`)
+Controls and autos request `SuperstructureGoal` values instead of manipulating motors. The superstructure converts a goal into mechanism behavior and reports whether it is ready for autonomous use.
 
-New robot mechanisms (intake, shooter, feeder, climber) should be created inside `src/main/java/frc/robot/subsystems/mechanisms/`.
+`TemplateMechanismSubsystem` is intentionally hardware-free. For a new mechanism:
 
-### Subsystem Structure Template
+1. Create a mechanism-specific constants class in `config/`.
+2. Add each CAN device to `CanTopology`.
+3. Construct and configure hardware inside the subsystem.
+4. Add connection, homing, limit, and fault conditions.
+5. Gate outputs with `SafetyManager.isSafe()`.
+6. Add goals to `SuperstructureGoal` and coordinate them in `Superstructure`.
+7. Add a routine-specific action or branch in `Autos.java` when the mechanism is needed in autonomous.
 
-Use `ExampleMechanismSubsystem.java` as a pattern for new subcomponents:
+## Safety and Readiness
 
-1. Instantiate TalonFX motors referencing `MechanismConstants.java`:
-   ```java
-   OperatorConstants.krkExampleMotor.getConfigurator().apply(OperatorConstants.defaultPowerConfig);
-   ```
-2. Put continuous updates inside `periodic()`:
-   - Output diagnostic values to `SmartDashboard`.
-   - Update motor output states based on subsystem variables.
-3. Write helper methods for states: `on()`, `off()`, `forward()`, `reverse()`, `stop()`.
+`SafetyManager` supports:
 
----
+- Hard interlocks that can never be overridden.
+- Soft interlocks that can only be overridden while Test mode is enabled.
+- NT4 `safe`, `blockers`, and `manualOverrideActive` status.
+- Driver Station warnings for blocked mechanisms and active overrides.
 
-## 4. High-Level State Management (`src/main/java/frc/robot/subsystems/StateHandler.java`)
+`FaultMonitor` latches serious failures until an intentional disabled-mode clear. `HomingState` provides consistent `UNHOMED`, `HOMING`, `READY`, and `FAULT` states for future mechanisms.
 
-`StateHandler` coordinates complex multi-subsystem actions and target pose selection.
+`RobotStatus` currently checks:
 
-- Setting Target Pose:
-  Call `setTarget(Pose2d target)` or `setPathfindingTarget(Pose2d target)` to select where the robot should pathfind to.
-- Triggering Pathfinding:
-  `pathfindToCurrentTarget()` returns a command that uses PathPlanner `AutoBuilder.pathfindToPose()` to autonomously navigate to the current target pose.
-- High-Level Robot States:
-  `setState(STATES state)` combines mechanism commands and pathfinding commands into parallel or sequential command groups.
+- selected autonomous readiness,
+- driver/operator controller connection,
+- Limelight heartbeat when expected by the active profile,
+- drivetrain gyro and odometry,
+- template-mechanism readiness.
 
----
+Before a match, require `RobotStatus/ready = true`, confirm `Auto/Selected`, and require `Auto/Readiness = READY`. `FALLBACK READY` means the robot can recover safely, but the selected primary auto is invalid and still needs attention.
 
-## 5. Robot Testing & Operational Checklist
+## Build and Deployment
 
-Follow this workflow when powering up and testing the robot:
+Use the WPILib 2026 JDK and tooling:
 
-1. Power-On Sequence:
-   - Turn on the Wi-Fi Access Point.
-   - Turn on the robot main power breaker.
-   - Connect driver laptop to the robot network.
-2. Field Position Reset (Crucial for Vision & Auto-Alignment):
-   - Place the robot on the field in a known position.
-   - Enable Autonomous mode briefly with the reset routine selected, or run the auto sequence at the start of the match to reset the `Pose2d` estimate.
-   - Switch back to Teleop mode; auto-alignment features (such as hub target alignment) are now calibrated and ready.
-3. Safe Testing Rules:
-   - Always verify motor directions at low speeds (`0.1` to `0.2`) before testing full speed.
-   - Ensure emergency stop (Spacebar on Driver Station) is within reach during initial testing.
+```powershell
+.\gradlew.bat build
+.\gradlew.bat simulateJava
+.\gradlew.bat deploy
+```
+
+The 2027 migration is intentionally deferred. Use the official importer when the team adopts the stable 2027 toolchain; then update Java packages, GradleRIO deployment, vendor libraries, Limelight helper compatibility, and Systemcore CAN bus identifiers.
+
+## Elastic Dashboard
+
+Use Elastic as the match dashboard. Build an Auto panel from these NT4 values:
+
+- `Auto/Available`: selectable Java routine names.
+- `Auto/Requested`: editable string; write an exact name while disabled.
+- `Auto/Selected`, `Auto/Readiness`, `Auto/Executing`, and `Auto/Step`: prominent text widgets.
+- `RobotStatus/ready`, `RobotStatus/unhealthy`, and `RobotStatus/warnings`: prominent readiness and warning widgets.
+- `Vision/targetVisible`, `Vision/trustedPose`, `Vision/tagCount`, and `Vision/rejectionReason`: vision-health widgets.
+
+Treat `Auto/Readiness = READY` and `RobotStatus/ready = true` as the match-start gate. Do not rely on a displayed routine name alone.

@@ -4,118 +4,85 @@
 
 package frc.robot;
 
-import static edu.wpi.first.units.Units.*;
-
-import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
-import com.ctre.phoenix6.swerve.SwerveRequest;
-
-import edu.wpi.first.net.PortForwarder;
-
-import com.pathplanner.lib.auto.AutoBuilder;
-import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.commands.FollowPathCommand;
 import com.pathplanner.lib.commands.PathfindingCommand;
 
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
-import frc.robot.constants.StateConstants;
-import frc.robot.constants.PoseConstants;
-import frc.robot.constants.SwerveConstants;
-import frc.robot.constants.MechanismConstants.OperatorConstants;
-import frc.robot.subsystems.CommandSwerveDrivetrain;
-import frc.robot.subsystems.VisionSubsystem;
-import frc.robot.subsystems.StateHandler;
-import frc.robot.subsystems.mechanisms.ExampleMechanismSubsystem;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.autos.AutoManager;
+import frc.robot.autos.AutoFactory;
+import frc.robot.autos.Autos;
+import frc.robot.commands.drivetrain.FieldTargetManager;
+import frc.robot.config.RobotConfig;
+import frc.robot.config.SwerveConstants;
+import frc.robot.controls.ControlBindings;
+import frc.robot.controls.DriverControls;
+import frc.robot.controls.OperatorControls;
+import frc.robot.subsystems.drivetrain.CommandSwerveDrivetrain;
+import frc.robot.subsystems.vision.LimelightVisionSubsystem;
+import frc.robot.subsystems.mechanisms.TemplateMechanismSubsystem;
+import frc.robot.superstructure.Superstructure;
 import frc.robot.telemetry.Telemetry;
+import frc.robot.telemetry.RobotStatus;
 
 public class RobotContainer {
-    double speed = 1.00;
-    
-    // Drive Speed Located Here
-    private double MaxSpeed = speed * SwerveConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
-    private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
-
-    // Setting up bindings for necessary control of the swerve drive platform
-    private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-            .withDeadband(MaxSpeed * 0.1).withRotationalDeadband(MaxAngularRate * 0.1) // Add a 10% deadband
-            .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
-    private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
-
-    private final Telemetry logger = new Telemetry(MaxSpeed);
+    private final Telemetry logger = new Telemetry();
+    private final RobotStatus robotStatus = new RobotStatus();
+    private final DriverControls driverControls = new DriverControls();
+    private final OperatorControls operatorControls = new OperatorControls();
 
     public final CommandSwerveDrivetrain drivetrain = SwerveConstants.createDrivetrain();
 
-    private final VisionSubsystem vision = new VisionSubsystem(drivetrain);
-    private final StateHandler stateHandler = new StateHandler(drivetrain);
-
-    /* Path follower */
-    private final SendableChooser<Command> autoChooser;
-    
-    // Initialization of Subsystems
-    private final StateHandler m_StateHandler = new StateHandler(drivetrain);
-
-    // Commands
-    Command stateCommand = Commands.runOnce(() -> {
-        m_StateHandler.setState(StateConstants.STATES.SPECIAL);
-    }, m_StateHandler);
+    private final LimelightVisionSubsystem vision = new LimelightVisionSubsystem(drivetrain);
+    private final TemplateMechanismSubsystem templateMechanism = new TemplateMechanismSubsystem();
+    private final Superstructure superstructure = new Superstructure(templateMechanism);
+    private final FieldTargetManager fieldTargets = new FieldTargetManager(drivetrain);
+    private final AutoManager autoManager = new AutoManager(
+        vision::hasRecentTrustedPose,
+        superstructure::isReadyForAuto,
+        superstructure::safeStopCommand);
+    private final AutoFactory autoFactory = new AutoFactory(fieldTargets, superstructure);
     
     public RobotContainer() {
-        configureAutoBindings();
+        Autos.registerAll(autoManager, autoFactory);
         configureBindings();
-        
-        autoChooser = AutoBuilder.buildAutoChooser("Tests");
-        SmartDashboard.putData("Auto Mode", autoChooser);
+        robotStatus.register(
+            "limelight",
+            "LIMELIGHT NOT CONNECTED",
+            () -> !RobotConfig.ACTIVE_PROFILE.limelightExpected() || vision.isConnected());
+        robotStatus.register("driver-controller", "DRIVER CONTROLLER NOT CONNECTED", driverControls::isConnected);
+        robotStatus.register(
+            "operator-controller",
+            "OPERATOR CONTROLLER NOT CONNECTED",
+            () -> !RobotConfig.ACTIVE_PROFILE.operatorControllerExpected() || operatorControls.isConnected());
+        robotStatus.register("gyro", "DRIVETRAIN GYRO NOT CONNECTED", () -> drivetrain.getPigeon2().isConnected());
+        robotStatus.register("drivetrain", "DRIVETRAIN ODOMETRY NOT HEALTHY", drivetrain::isOdometryHealthy);
+        robotStatus.register("template-mechanism", "TEMPLATE MECHANISM NOT READY", templateMechanism::isReady);
+        robotStatus.register("auto", "NO VALID AUTONOMOUS ROUTINE SELECTED", autoManager::hasReadySelection);
+
         // Warmup PathPlanner to avoid Java pauses
-        FollowPathCommand.warmupCommand().schedule();
-        PathfindingCommand.warmupCommand().schedule();
-        PortForwarder.add(5800, "photonvision.local", 5800);
-        SmartDashboard.putBoolean("Camera Connected?", vision.isCameraConnected());
-    }
-    // Path target and commands are handled by StateHandler now.
-    
-    private void configureAutoBindings() {
-        // Register Commands
-        NamedCommands.registerCommand("ExampleToggle", stateCommand);
+        CommandScheduler.getInstance().schedule(
+            FollowPathCommand.warmupCommand(),
+            PathfindingCommand.warmupCommand());
     }
     private void configureBindings() {
-        // Note that X is defined as forward according to WPILib convention,
-        // and Y is defined as to the left according to WPILib convention.
-        drivetrain.setDefaultCommand(
-            // Drivetrain will execute this command periodically
-            drivetrain.applyRequest(() ->
-                drive.withVelocityX(OperatorConstants.controllerOne.getLeftY() * -MaxSpeed / 1) // Drive forward with negative Y (forward)
-                    .withVelocityY(OperatorConstants.controllerOne.getLeftX() * -MaxSpeed / 1) // Drive left with negative X (left)
-                    // .withRotationalRate((-OperatorConstants.controllerOne.getRightX() + m_autoAlign.robotRotationOffset(drivetrain, OperatorConstants.controllerOne.b().getAsBoolean())) * MaxAngularRate) // Drive counterclockwise with negative X (left)
-                    .withRotationalRate((-OperatorConstants.controllerOne.getRightX())* MaxAngularRate) // Drive counterclockwise with negative X (left)
-            )
-        );
-
-        // Idle while the robot is disabled. This ensures the configured
-        // neutral mode is applied to the drive motors while disabled.
-        final var idle = new SwerveRequest.Idle();
-        RobotModeTriggers.disabled().whileTrue(
-            drivetrain.applyRequest(() -> idle).ignoringDisable(true)
-        );
-
-        // Drivetrain Bindings
-        OperatorConstants.controllerOne.x().whileTrue(drivetrain.applyRequest(() -> brake));
-        OperatorConstants.controllerOne.back().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
-        OperatorConstants.controllerOne.y().toggleOnTrue(stateHandler.pathfindToCurrentTarget());
-        OperatorConstants.controllerOne.povLeft().onTrue(stateHandler.setTarget(PoseConstants.SHOOT_LEFT));
-        OperatorConstants.controllerOne.povRight().onTrue(stateHandler.setTarget(PoseConstants.SHOOT_RIGHT));
-        OperatorConstants.controllerOne.povDown().onTrue(stateHandler.setTarget(PoseConstants.SHOOT_MID));
-        
-        // Mechanism Bindings
-        OperatorConstants.controllerOne.b().onTrue(stateCommand); //
-
+        ControlBindings.configure(
+            driverControls,
+            operatorControls,
+            drivetrain,
+            fieldTargets,
+            superstructure,
+            autoManager);
         drivetrain.registerTelemetry(logger::telemeterize);
     }
 
     public Command getAutonomousCommand() {
-        /* Run the path selected from the auto chooser */
-        return autoChooser.getSelected();
+        return autoManager.getSelectedCommand();
+    }
+
+    /** Called from Robot.robotPeriodic so disabled-mode auto warnings stay current. */
+    public void periodic() {
+        autoManager.periodic();
+        robotStatus.periodic();
     }
 }

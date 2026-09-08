@@ -2,16 +2,8 @@
   "robotWidth": 0.851,
   "robotLength": 0.8509,
   "holonomicMode": true,
-  "pathFolders": [
-    "BACK TO SET",
-    "BUMP",
-    "GRAB",
-    "SHOOTING"
-  ],
-  "autoFolders": [
-    "LEFT AUTOS",
-    "RIGHT AUTOS"
-  ],
+  "pathFolders": [],
+  "autoFolders": [],
   "defaultMaxVel": 3.0,
   "defaultMaxAccel": 3.0,
   "defaultMaxAngVel": 540.0,
