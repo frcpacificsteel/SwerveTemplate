@@ -1,0 +1,49 @@
+name: Feature or improvement request
+description: Turn a team need into a small, testable programming work item.
+title: "feature: "
+labels: ["type: feature", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Describe the outcome, not the implementation. Programming will collaborate on the technical approach."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Team need
+      description: Who needs this, and what problem does it solve during build, practice, or competition?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired behavior
+      description: Explain what success looks like from the user's point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      description: List observable checks that prove this is done.
+      placeholder: |
+        - [ ] When ..., the robot/system ...
+        - [ ] Driver/operator can ...
+        - [ ] Failure behavior is ...
+    validations:
+      required: true
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: When is this needed?
+      options:
+        - Before the next scheduled test
+        - Before the next event
+        - This build season, not urgent
+        - Future improvement
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and references
+      description: Include safety limits, mechanism state, controls, sketches, links, or related issues.

@@ -1,0 +1,33 @@
+name: Test session result
+description: Capture a test result so the team can act on evidence quickly.
+title: "test: "
+labels: ["type: test", "status: needs triage"]
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Test objective
+      description: What question was this test intended to answer?
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Include robot state, code revision, field/setup, battery, and test operator.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: Record measurements, observations, links to media/logs, and whether the check passed.
+    validations:
+      required: true
+  - type: textarea
+    id: followup
+    attributes:
+      label: Decision and follow-up
+      description: Link bugs/tasks created from this result, or explain why no follow-up is needed.
+    validations:
+      required: true

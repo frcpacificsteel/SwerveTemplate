@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Team discussion
+    url: https://github.com/frcpacificsteel
+    about: Use discussions, meetings, or the team chat for questions that are not ready to be planned as work.

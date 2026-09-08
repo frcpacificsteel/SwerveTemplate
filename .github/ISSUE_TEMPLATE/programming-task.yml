@@ -1,0 +1,42 @@
+name: Programming task
+description: Create a scoped engineering task after triage or technical investigation.
+title: "task: "
+labels: ["type: task", "status: ready"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: State the smallest outcome this task will deliver.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Name the expected subsystems/files/interfaces and explicitly exclude adjacent work.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation notes
+      description: Link related issues and record decisions, risks, interfaces, and constraints.
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      value: |
+        - [ ] Implementation is reviewed
+        - [ ] Relevant validation is run and recorded
+        - [ ] Driver/operator-facing behavior is documented when it changes
+        - [ ] Follow-up work is filed separately
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety review
+      options:
+        - label: This task cannot affect physical robot behavior.
+        - label: This task can affect robot behavior; safe test conditions are described above.

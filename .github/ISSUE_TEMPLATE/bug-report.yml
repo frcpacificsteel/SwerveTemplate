@@ -1,0 +1,61 @@
+name: Bug report
+description: Report behavior that is incorrect, unsafe, or unexpectedly unreliable.
+title: "bug: "
+labels: ["type: bug", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for making this reproducible. Do not operate the robot until safety-critical behavior is understood.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: State the observed behavior and the expected behavior.
+      placeholder: "Observed: ...\nExpected: ..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence, including robot mode and controls used.
+      placeholder: |
+        1. Deploy commit ...
+        2. Enable in ... mode
+        3. Press / select ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks safe robot operation or could damage equipment
+        - Blocks a planned test or match capability
+        - Degrades a feature but a workaround exists
+        - Minor or cosmetic
+    validations:
+      required: true
+  - type: checkboxes
+    id: environment
+    attributes:
+      label: Where did this happen?
+      options:
+        - label: On the physical robot
+        - label: In simulation
+        - label: In a unit/integration test
+        - label: In driver practice or a match
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Attach Driver Station logs, screenshots, photos, videos, console output, or NetworkTables values. Remove secrets.
+  - type: textarea
+    id: context
+    attributes:
+      label: Version and context
+      description: Include commit/branch, robot configuration, battery state, alliance/mode, and recent changes when known.
+    validations:
+      required: true
