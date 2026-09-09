@@ -1,86 +1,64 @@
-# FRC Team 5025 - Pacific Steel Swerve Template
+# Pacific Steel 5025 swerve template
 
-This repository is Team 5025's 2026 WPILib Java template. It gives a new robot project a safe, understandable starting point for swerve, separate Limelight vision, mechanisms, autonomous, health checks, and field-side debugging.
+This is FRC Team 5025's 2026 Java starting point for a command-based swerve robot. It is meant to be copied at the beginning of a season, then turned into the team's real robot code with deliberate hardware configuration, tested mechanisms, and field-proven autonomous routines.
 
-## Overview
+The template includes a CTRE Phoenix 6 swerve drivetrain, isolated Limelight vision, Java-defined autonomous routines, NT4 telemetry, and safety scaffolding for future mechanisms. It starts conservatively: the only enabled autonomous routine is `Do Nothing` until the team configures and validates its own routines.
 
-The code uses WPILib's command-based model with isolated configuration, intent-based controls, Java-defined autonomous routines, safety, a goal-based superstructure, Limelight vision, and dashboard-neutral NT4 telemetry.
+## Before you use it
 
-### Key Components
+This repository is not ready to deploy to a competition robot as-is. After game reveal, work through the [new season checklist](NEW_SEASON_CHECKLIST.md). In particular, replace placeholder field data, CAN assignments, swerve calibration, vision configuration, and the hardware-free mechanism skeleton before testing the robot.
 
-- Drivetrain & Kinematics: Swerve drive control integrated with CTRE Phoenix 6 and PathPlanner libraries.
-- Subsystems & Mechanisms: Modular components representing physical robot hardware and actuators.
-- Autonomous: small Java steps, condition branches, actual-time route selection, explicit selection warnings, and safe recovery.
-- Safety & Superstructure: reusable interlocks, latched faults, and goal-based mechanism coordination.
-- Vision & Telemetry: separate Limelight integration and dashboard-neutral NT4 status.
+The two sample PathPlanner paths are examples, not competition paths. The team keeps path files for authored trajectories, but assembles autonomous routines in Java rather than committing PathPlanner `.auto` files.
 
-## Prerequisites & Tools
+## Quick start
 
-- Java Development Kit 17 for the 2026 WPILib toolchain
-- WPILib Development Suite
-- Gradle build tool (included wrapper `./gradlew`)
-- Driver Station plus an NT4-compatible telemetry viewer (for example, Elastic or AdvantageScope)
+Install the 2026 WPILib Development Suite and use its Java 17 toolchain. Then clone the repository and build it.
 
-## Build and Deployment Commands
-
-To build the robot project:
-
-```bash
-./gradlew build
+```powershell
+.\gradlew.bat build
 ```
 
-To deploy code to the roboRIO:
+Useful commands:
 
-```bash
-./gradlew deploy
+```powershell
+.\gradlew.bat simulateJava
+.\gradlew.bat deploy
 ```
 
-To run in simulation mode:
+Run a build before opening a pull request. A successful build checks compilation; it does not prove the code is safe on a real robot.
 
-```bash
-./gradlew simulateJava
-```
+## Where things live
 
-## First setup for a new robot
+| Area | Start here |
+| --- | --- |
+| Season and hardware settings | [`src/main/java/frc/robot/config/`](src/main/java/frc/robot/config/) |
+| Controller bindings | [`src/main/java/frc/robot/controls/`](src/main/java/frc/robot/controls/) |
+| Autonomous routines | [`src/main/java/frc/robot/autos/Autos.java`](src/main/java/frc/robot/autos/Autos.java) |
+| Subsystems, vision, and mechanisms | [`src/main/java/frc/robot/subsystems/`](src/main/java/frc/robot/subsystems/) |
+| Cross-mechanism goals | [`src/main/java/frc/robot/superstructure/`](src/main/java/frc/robot/superstructure/) |
+| Interlocks and fault handling | [`src/main/java/frc/robot/safety/`](src/main/java/frc/robot/safety/) |
+| Editable PathPlanner paths | [`src/main/deploy/pathplanner/paths/`](src/main/deploy/pathplanner/paths/) |
 
-1. Set the active hardware profile in `config/RobotConfig.java`.
-2. Set controller ports in `config/ControlConstants.java`.
-3. Add every CAN device to `config/CanTopology.java`; drivetrain calibration stays in `config/SwerveConstants.java`.
-4. Replace the placeholder poses in `config/FieldConstants.java` after game reveal.
-5. Turn `TemplateMechanismSubsystem` into each real mechanism, then wire its goals through `Superstructure`.
-6. Create match routines in `autos/Autos.java`. The editable PathPlanner `.path` library is retained; `.auto` files are intentionally not used.
-7. Build with Java 17: `./gradlew build`, then verify `RobotStatus/ready` and the selected auto before driving.
+## Autonomous and safety
 
-## Autonomous in one minute
+Autos are registered in Java. A routine can follow a saved path, pathfind from its live pose to recover from a delay, run mechanism actions, and choose a shorter route when there is no longer enough match time to score safely. The built-in recovery pattern stows mechanisms and uses a configured defensive location; if that cannot run safely, it falls back to `Do Nothing`.
 
-Autos are Java code. This means a programmer can use normal names, methods, conditions, and code review—without manually keeping a dashboard chooser, event names, and `.auto` assets synchronized. Use `.path` files for authored trajectories, but assemble them in Java.
+Before a match, use Elastic or another NT4 dashboard to confirm:
 
-```java
-autoManager.register(auto.routine("Leave And Decide")
-    .followPath("Leave start", auto, "Example Mobility")
-    .whenScoringStillAvailable(
-        "Score only if the live pose can reach it safely",
-        auto,
-        FieldConstants.SCORE_MID,
-        AutoConstants.SCORING_ACTION_ESTIMATED_SECONDS,
-        AutoConstants.SCORING_TIME_SAFETY_MARGIN_SECONDS,
-        () -> auto.sequence(
-            auto.pathfindThenFollowPath("Example Recovery Route"),
-            auto.goal(SuperstructureGoal.PRIMARY_ACTION)),
-        auto::stow)
-    .build());
-```
+- `RobotStatus/ready` is `true`
+- `Auto/Selected` is the intended routine
+- `Auto/Readiness` says `READY`
+- active warnings and latched faults have been understood and fixed
 
-The score branch is decided when reached, from the robot's live pose and remaining autonomous time. It estimates travel time from that position, adds the configured scoring duration and safety margin, then skips the score if it is no longer feasible. `Do Nothing` is the only enabled routine until your team adds its own.
+`FALLBACK READY` means the robot has a safer alternative available. It does not mean the selected primary routine is ready to run.
 
-For saved paths, use `.followPath("Leave Start")`. To recover from an interrupted or delayed route, use `.pathfindThenFollowPath("Score Route")`; it plans from the robot's current pose, then joins and follows the saved path.
+## Guides
 
-For full game-reveal preparation and Elastic dashboard setup, use [NEW_SEASON_CHECKLIST.md](NEW_SEASON_CHECKLIST.md).
+- [Team guide](TEAM_GUIDE.md) explains controls, dashboard messages, autonomous behavior, and fault recovery for drivers, pit crew, mentors, scouts, and new students.
+- [Repository guide](REPOSITORY_GUIDE.md) covers code structure, configuration, autonomous routines, safety, vision, and Elastic in detail.
+- [New season checklist](NEW_SEASON_CHECKLIST.md) is the release gate for turning this template into a competition robot.
+- [Contributing guide](CONTRIBUTING.md) explains how we make and review changes.
 
-## For drivers, mentors, and new students
+## License
 
-Read [TEAM_GUIDE.md](TEAM_GUIDE.md) for a non-programmer explanation of how the robot code, Elastic dashboard, safety behavior, and autonomous recovery work.
-
-## Repository Guide
-
-For detailed setup instructions, hardware mapping, controller configuration, autonomous selection, and guides on modifying code for new mechanisms, refer to `REPOSITORY_GUIDE.md` located in the root directory.
+See [WPILib-License.md](WPILib-License.md) for the included WPILib license information.
