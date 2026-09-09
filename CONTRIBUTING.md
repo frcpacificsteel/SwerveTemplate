@@ -47,6 +47,22 @@ Include:
 
 Ask for review from someone who understands the subsystem you changed. Do not self-merge robot-impacting changes unless a mentor has explicitly made an exception.
 
+## Commit messages
+
+Start every commit message with a conventional type and a colon. Use a short, imperative summary after the colon.
+
+```text
+feat: add intake homing check
+fix: stop auto when vision pose is stale
+docs: clarify pre-match readiness check
+refactor: isolate drivetrain target selection
+test: cover rejected vision estimate
+build: update PathPlanner vendor dependency
+chore: refresh editor settings
+```
+
+Use `feat` for new robot or team behavior, `fix` for a correction, and `docs` for documentation-only work. Do not use vague messages such as `updates`, `changes`, or `final`.
+
 ## Before merging
 
 - The branch protection checks pass.
